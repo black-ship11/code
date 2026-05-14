@@ -1,799 +1,1112 @@
 
-## 1️⃣ ML: Gradient Descent
+## 1️⃣ DL: Linear Regression
 ```python
-# Paste your Gradient Descent code here
-# Gradient Descent to find the local minima of y = (x + 3)^2
-# Simple and beginner-friendly version
-
+# ── STEP 1: Import Libraries ──────────────────────────────────────
 import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Input
+from tensorflow.keras.optimizers import Adam
 import matplotlib.pyplot as plt
 
-# Define the function y = (x + 3)^2
-def f(x):
-    return (x + 3)**2
+print('TensorFlow version:', tf.__version__)
 
-# Define its derivative (gradient)
-def df(x):
-    return 2 * (x + 3)
+# ── STEP 2: Load Dataset from CSV ────────────────────────────────
+df = pd.read_csv('HousingData.csv')
+df.columns = df.columns.str.strip().str.upper()
 
-# --- Algorithm Parameters ---
-x = 2              # starting point
-learning_rate = 0.1
-iterations = 30
+print('Shape:', df.shape)
+print('Columns:', df.columns.tolist())
+print('\nMissing values per column:')
+print(df.isnull().sum())
+df.head()
 
-print("---- Gradient Descent Execution ----")
-print(f"Starting point: x = {x}")
-print(f"Learning rate: {learning_rate}")
-print(f"Number of iterations: {iterations}\n")
+# ── STEP 3: Fix Missing Values (NaN) ── KEY FIX ──────────────────
+# NaN values were causing the model to get stuck at loss=72
+# Solution: replace each NaN with the mean of that column
+df.fillna(df.mean(numeric_only=True), inplace=True)
 
-# Store steps for visualization
-x_values = [x]
+print('Missing values AFTER fix:')
+print(df.isnull().sum())   # all must be 0
+print('\nMEDV stats:')
+print(df['MEDV'].describe())
 
-# --- Gradient Descent Loop ---
-for i in range(iterations):
-    grad = df(x)
-    x = x - learning_rate * grad
-    x_values.append(x)
-    print(f"Iteration {i+1:2}: x = {x:.6f}, f(x) = {f(x):.6f}")
+# ── STEP 4: Separate Features and Target ─────────────────────────
+X = df.drop(columns=['MEDV']).values
+y = df['MEDV'].values
 
-print("\n---- Result ----")
-print(f"Local minima found at x = {x:.6f}")
-print(f"Value of the function (minimum y) = {f(x):.6f}")
+print('X shape:', X.shape)
+print('y shape:', y.shape)
+print('y sample:', y[:5])
+# ── STEP 5: Train-Test Split ──────────────────────────────────────
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
+print('Train:', X_train.shape, '| Test:', X_test.shape)
+# ── STEP 6: Scale Features ────────────────────────────────────────
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test  = scaler.transform(X_test)
+print('Scaling done.')
+# ── STEP 7: Build Deep Neural Network ────────────────────────────
+tf.random.set_seed(42)
 
-# --- Visualization ---
-# Create smooth curve of the function
-x_plot = np.linspace(-8, 3, 100)
-y_plot = f(x_plot)
+model = Sequential([
+    Input(shape=(13,)),
+    Dense(128, activation='relu'),
+    Dense(64,  activation='relu'),
+    Dense(32,  activation='relu'),
+    Dense(1)                        # linear output — no activation
+])
 
-# Plot the function and gradient descent steps
-plt.plot(x_plot, y_plot, label="y = (x + 3)²")
-plt.scatter(x_values, [f(i) for i in x_values], color="red", label="Descent steps")
-plt.title("Gradient Descent to find Local Minima")
-plt.xlabel("x")
-plt.ylabel("y")
+model.compile(
+    optimizer=Adam(learning_rate=0.001),
+    loss='mse',
+    metrics=['mae']
+)
+model.summary()
+# ── STEP 8: Train ─────────────────────────────────────────────────
+history = model.fit(
+    X_train, y_train,
+    epochs=50,
+    batch_size=16,
+    validation_split=0.1,
+    verbose=1
+)
+
+print(f'First 5 losses : {[round(x,2) for x in history.history["loss"][:5]]}')
+print(f'Last  5 losses : {[round(x,2) for x in history.history["loss"][-5:]]}')
+print(f'\nFinal Train MSE : {history.history["loss"][-1]:.4f}')
+print(f'Final Val   MSE : {history.history["val_loss"][-1]:.4f}')
+# ── STEP 9: Evaluate on Test Set ─────────────────────────────────
+loss, mae = model.evaluate(X_test, y_test, verbose=0)
+print(f'Test MSE  : {loss:.4f}')
+print(f'Test MAE  : {mae:.4f}')
+print(f'Test RMSE : {np.sqrt(loss):.4f}')
+# ── STEP 10: Predictions ──────────────────────────────────────────
+predictions = model.predict(X_test, verbose=0).flatten()
+
+print('First 10 Predictions vs Actual:')
+print(f'{"Predicted ($k)":>16}  {"Actual ($k)":>12}  {"Error":>8}')
+print('-' * 42)
+for i in range(10):
+    err = predictions[i] - y_test[i]
+    print(f'  {predictions[i]:>12.1f}      {y_test[i]:>8.1f}   {err:>+7.1f}')
+  # ── STEP 11: Plots ────────────────────────────────────────────────
+plt.figure(figsize=(12, 4))
+
+plt.subplot(1, 2, 1)
+plt.plot(history.history['loss'],     label='Train Loss')
+plt.plot(history.history['val_loss'], label='Val Loss')
+plt.title('Loss (MSE) over Epochs')
+plt.xlabel('Epoch')
+plt.ylabel('MSE')
 plt.legend()
-plt.grid(True)
-plt.show()
 
+plt.subplot(1, 2, 2)
+plt.scatter(y_test, predictions, alpha=0.6, color='steelblue')
+plt.plot([y_test.min(), y_test.max()],
+         [y_test.min(), y_test.max()],
+         'r--', label='Perfect Prediction')
+plt.xlabel('Actual Price ($1000s)')
+plt.ylabel('Predicted Price ($1000s)')
+plt.title('Actual vs Predicted House Prices')
+plt.legend()
+
+plt.tight_layout()
+plt.show()
 ````
 
 ---
 
-## 2️⃣ ML: Email Classification (KNN + SVM)
+## 2️⃣ DL: Multiclass Classification using Deep Neural Network
 
 ```python
-# Paste your Email Classification code here
+# Dataset: UCI Letter Recognition Dataset
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
+
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.svm import SVC
-from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 
-# Load dataset
-df = pd.read_csv("emails.csv")
-print("Dataset loaded successfully ✅")
-print(df.head())
-print("\nDataset shape:", df.shape)
-df.isna().sum()
-
-plt.figure(figsize=(5,4))
-df['Prediction'].value_counts().plot(kind='bar', color=['green', 'red'])
-plt.title("Distribution of Email Types")
-plt.xlabel("Email Class (0 = Not Spam, 1 = Spam)")
-plt.ylabel("Count")
-plt.show()
-
-plt.figure(figsize=(5,4))
-plt.hist(df["free"], bins=20, color='blue', alpha=0.7)
-plt.title("Histogram of word: 'free'")
-plt.xlabel("Frequency Count")
-plt.ylabel("Number of Emails")
-plt.show()
-# Drop unnecessary column
-df.drop("Email No.", axis=1, inplace=True)
-
-# Separate features (X) and target (y)
-X = df.iloc[:, :-1]      # all word-frequency columns
-y = df.iloc[:, -1]       # Prediction column (1 = Spam, 0 = Not Spam)
-
-# Split into train & test sets
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42
-)
-
-# Scale numeric features (important for KNN & SVM)
-scaler = StandardScaler()
-X_train = scaler.fit_transform(X_train)
-X_test = scaler.transform(X_test)
-
-print("Data cleaned, split, and scaled successfully ✅")
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Dropout
+from tensorflow.keras.utils import to_categorical
+from tensorflow.keras.optimizers import RMSprop
 
 
-# Simple KNN Concept Plot (Dummy Visualization)
-plt.figure(figsize=(5,5))
-# Fake points just for explanation
-plt.scatter([1,2,1.5], [2,1,1.2], color='green', label='Not Spam')
-plt.scatter([4,5,4.5], [5,4,4.2], color='red', label='Spam')
-# New email point
-plt.scatter(3,3, color='black', label='New Email', s=100)
-plt.title("KNN Concept Visualization")
-plt.xlabel("Feature 1")
-plt.ylabel("Feature 2")
-plt.legend()
-plt.show()
+# ------------------------------------------------------
+# Step 1: Load Dataset
+# ------------------------------------------------------
+
+url = "https://archive.ics.uci.edu/ml/machine-learning-databases/letter-recognition/letter-recognition.data"
+
+columns = [
+    "letter", "x-box", "y-box", "width", "high", "onpix",
+    "x-bar", "y-bar", "x2bar", "y2bar", "xybar",
+    "x2ybr", "xy2br", "x-ege", "xegvy", "y-ege", "yegvx"
+]
+
+data = pd.read_csv(url, names=columns)
+
+print("First 5 rows of dataset:")
+print(data.head())
+
+print("\nDataset Shape:", data.shape)
+
+print("\nClass Labels:")
+print(data["letter"].unique())
 
 
+# ------------------------------------------------------
+# Step 2: Separate Input and Output
+# ------------------------------------------------------
 
-knn = KNeighborsClassifier(n_neighbors=5)
-knn.fit(X_train, y_train)
-knn_pred = knn.predict(X_test)
-knn_acc = accuracy_score(y_test, knn_pred)
-print("\n--- K-Nearest Neighbors (KNN) ---")
-print("Accuracy:", round(knn_acc*100, 2), "%")
-print("Confusion Matrix:\n", confusion_matrix(y_test, knn_pred))
-print("Classification Report:\n", classification_report(y_test, knn_pred))
+X = data.drop("letter", axis=1)
+y = data["letter"]
 
 
+# ------------------------------------------------------
+# Step 3: Encode Target Labels
+# ------------------------------------------------------
+# A-Z letters are converted into numbers 0-25
 
-# Simple SVM Concept Plot (Dummy Visualization)
-plt.figure(figsize=(5,5))
-# Fake dataset points
-plt.scatter([1,2,1.5], [2,1,1.2], color='green', label='Not Spam')
-plt.scatter([4,5,4.5], [5,4,4.2], color='red', label='Spam')
-# A simple separating line
-plt.plot([0,6], [0,6], color='blue', linestyle='--', label='SVM Decision Boundary')
-plt.title("SVM Decision Boundary Concept")
-plt.xlabel("Feature 1")
-plt.ylabel("Feature 2")
-plt.legend()
-plt.show()
+label_encoder = LabelEncoder()
+y_encoded = label_encoder.fit_transform(y)
+
+# Convert labels into one-hot encoding
+# Example: A -> [1,0,0,...], B -> [0,1,0,...]
+y_categorical = to_categorical(y_encoded)
 
 
-
-svm = SVC(kernel='rbf', gamma='auto', random_state=42)
-svm.fit(X_train, y_train)
-svm_pred = svm.predict(X_test)
-svm_acc = accuracy_score(y_test, svm_pred)
-print("\n--- Support Vector Machine (SVM) ---")
-print("Accuracy:", round(svm_acc*100, 2), "%")
-print("Confusion Matrix:\n", confusion_matrix(y_test, svm_pred))
-print("Classification Report:\n", classification_report(y_test, svm_pred))
-
-```
-
----
-
-## 3️⃣ ML: KNN on Diabetes Dataset
-
-```python
-# Paste your Diabetes KNN code here
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score
-df = pd.read_csv("diabetes.csv")
-print(df.head())
-print("Dataset Shape:", df.shape)
-
-plt.bar(df['Outcome'].value_counts().index,
-        df['Outcome'].value_counts().values,
-        color=['green','red'])
-
-plt.title("Count of Output Classes")
-plt.xlabel("No Diabetes (0), Diabetes (1)")
-plt.ylabel("Number of Patients")
-plt.show()
-
-cols = ['Glucose','BloodPressure','SkinThickness','Insulin','BMI']
-for c in cols:
-    df[c] = df[c].replace(0, df[c].mean())
-X = df.drop('Outcome', axis=1)   # All columns except Outcome
-y = df['Outcome']                # Target column
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42
-)
+# ------------------------------------------------------
+# Step 4: Feature Scaling
+# ------------------------------------------------------
 
 scaler = StandardScaler()
-X_train = scaler.fit_transform(X_train)
-X_test = scaler.transform(X_test)
-knn = KNeighborsClassifier(n_neighbors=5)
-knn.fit(X_train, y_train)
-y_pred = knn.predict(X_test)
-cm = confusion_matrix(y_test, y_pred)
-accuracy = accuracy_score(y_test, y_pred)
-error_rate = 1 - accuracy
-precision = precision_score(y_test, y_pred)
-recall = recall_score(y_test, y_pred)
+X_scaled = scaler.fit_transform(X)
 
-print("Confusion Matrix:\n", cm)
-print("\nAccuracy:", round(accuracy,3))
-print("Error Rate:", round(error_rate,3))
-print("Precision:", round(precision,3))
-print("Recall:", round(recall,3))
-k_values = [3, 5, 7]
-scores = []
 
-for k in k_values:
-    knn = KNeighborsClassifier(n_neighbors=k)
-    knn.fit(X_train, y_train)
-    pred = knn.predict(X_test)
-    scores.append(accuracy_score(y_test, pred))
+# ------------------------------------------------------
+# Step 5: Split Dataset
+# ------------------------------------------------------
 
-plt.plot(k_values, scores, marker='o')
-plt.title("KNN Accuracy vs K")
-plt.xlabel("K Value")
+X_train, X_test, y_train, y_test = train_test_split(
+    X_scaled,
+    y_categorical,
+    test_size=0.2,
+    random_state=42,
+    stratify=y_encoded
+)
+
+print("\nTraining samples:", X_train.shape[0])
+print("Testing samples:", X_test.shape[0])
+
+
+# ------------------------------------------------------
+# Step 6: Build Deep Neural Network Model
+# ------------------------------------------------------
+
+model = Sequential()
+
+# Input layer + first hidden layer
+model.add(Dense(128, activation="relu", input_shape=(16,)))
+
+# Dropout layer to reduce overfitting
+model.add(Dropout(0.3))
+
+# Second hidden layer
+model.add(Dense(64, activation="relu"))
+
+# Dropout layer
+model.add(Dropout(0.2))
+
+# Third hidden layer
+model.add(Dense(32, activation="relu"))
+
+# Output layer
+# 26 neurons because there are 26 classes A-Z
+model.add(Dense(26, activation="softmax"))
+
+
+# ------------------------------------------------------
+# Step 7: Compile Model
+# ------------------------------------------------------
+
+model.compile(
+    optimizer=RMSprop(learning_rate=0.001),
+    loss="categorical_crossentropy",
+    metrics=["accuracy"]
+)
+
+print("\nModel Summary:")
+model.summary()
+
+
+# ------------------------------------------------------
+# Step 8: Train Model
+# ------------------------------------------------------
+
+history = model.fit(
+    X_train,
+    y_train,
+    epochs=50,
+    batch_size=32,
+    validation_split=0.2,
+    verbose=1
+)
+
+
+# ------------------------------------------------------
+# Step 9: Evaluate Model
+# ------------------------------------------------------
+
+test_loss, test_accuracy = model.evaluate(X_test, y_test)
+
+print("\nTest Loss:", test_loss)
+print("Test Accuracy:", test_accuracy)
+
+
+# ------------------------------------------------------
+# Step 10: Predictions
+# ------------------------------------------------------
+
+y_pred_prob = model.predict(X_test)
+y_pred = np.argmax(y_pred_prob, axis=1)
+y_true = np.argmax(y_test, axis=1)
+
+print("\nAccuracy Score:", accuracy_score(y_true, y_pred))
+
+print("\nClassification Report:")
+print(classification_report(
+    y_true,
+    y_pred,
+    target_names=label_encoder.classes_
+))
+
+
+# ------------------------------------------------------
+# Step 11: Confusion Matrix
+# ------------------------------------------------------
+
+cm = confusion_matrix(y_true, y_pred)
+
+plt.figure(figsize=(12, 8))
+sns.heatmap(
+    cm,
+    annot=False,
+    cmap="Blues",
+    xticklabels=label_encoder.classes_,
+    yticklabels=label_encoder.classes_
+)
+plt.title("Confusion Matrix - Letter Recognition")
+plt.xlabel("Predicted Letter")
+plt.ylabel("Actual Letter")
+plt.show()
+
+
+# ------------------------------------------------------
+# Step 12: Accuracy Graph
+# ------------------------------------------------------
+
+plt.figure(figsize=(8, 5))
+plt.plot(history.history["accuracy"], label="Training Accuracy")
+plt.plot(history.history["val_accuracy"], label="Validation Accuracy")
+plt.title("Training and Validation Accuracy")
+plt.xlabel("Epochs")
 plt.ylabel("Accuracy")
-plt.grid(True)
+plt.legend()
 plt.show()
+
+
+# ------------------------------------------------------
+# Step 13: Loss Graph
+# ------------------------------------------------------
+
+plt.figure(figsize=(8, 5))
+plt.plot(history.history["loss"], label="Training Loss")
+plt.plot(history.history["val_loss"], label="Validation Loss")
+plt.title("Training and Validation Loss")
+plt.xlabel("Epochs")
+plt.ylabel("Loss")
+plt.legend()
+plt.show()
+
+
+# ------------------------------------------------------
+# Step 14: Test Single Sample Prediction
+# ------------------------------------------------------
+
+sample = X_test[0].reshape(1, -1)
+
+prediction = model.predict(sample)
+predicted_class_index = np.argmax(prediction)
+predicted_letter = label_encoder.inverse_transform([predicted_class_index])
+
+actual_class_index = np.argmax(y_test[0])
+actual_letter = label_encoder.inverse_transform([actual_class_index])
+
+print("\nSingle Sample Prediction")
+print("Actual Letter:", actual_letter[0])
+print("Predicted Letter:", predicted_letter[0])
+
 ```
 
 ---
 
-## 4️⃣ ML: K-Means Clustering
+## 3️⃣ DL: Binary Classification using Deep Neural Network
 
 ```python
-# Paste your K-Means Clustering code here
-import pandas as pd
+import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.preprocessing import StandardScaler
-from sklearn.cluster import KMeans
-df = pd.read_csv("sales_data_sample.csv", encoding='latin1')
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Embedding, Flatten
 
-print(df.head())
-print("\nDataset Shape:", df.shape)
-print("\nMissing Values in Each Column:")
-print(df.isnull().sum())
+# Load IMDB Dataset
+# num_words = top 10,000 frequently used words
+vocab_size = 10000
 
-# Select only numeric columns needed for clustering
-features = ["SALES", "QUANTITYORDERED", "PRICEEACH", "MSRP"]
-df_cluster = df[features]
-plt.figure(figsize=(6,4))
-plt.scatter(df_cluster["SALES"], df_cluster["MSRP"], color='blue', alpha=0.4)
-plt.title("Sales vs MSRP (Before Clustering)")
-plt.xlabel("SALES")
-plt.ylabel("MSRP")
-plt.show()
-scaler = StandardScaler()
-X_scaled = scaler.fit_transform(df_cluster)
-wcss = []   # Within-Cluster Sum of Squares
-
-for k in range(1, 11):
-    kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
-    kmeans.fit(X_scaled)
-    wcss.append(kmeans.inertia_)
-
-plt.figure(figsize=(7,4))
-plt.plot(range(1, 11), wcss, marker='o', linestyle='--')
-plt.title("Elbow Method to Determine Optimal K")
-plt.xlabel("Number of Clusters (K)")
-plt.ylabel("WCSS")
-plt.grid(True)
-plt.show()
-k = 3
-kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
-df["Cluster"] = kmeans.fit_predict(X_scaled)
-
-print("\nSample Data with Assigned Clusters:")
-print(df[["SALES", "QUANTITYORDERED", "PRICEEACH", "MSRP", "Cluster"]].head())
-plt.figure(figsize=(7,5))
-sns.scatterplot(
-    x=df["SALES"],
-    y=df["MSRP"],
-    hue=df["Cluster"],
-    palette='Set2',
-    alpha=0.8
+(X_train, y_train), (X_test, y_test) = tf.keras.datasets.imdb.load_data(
+    num_words=vocab_size
 )
-plt.title("K-Means Clustering Visualization (K = 3)")
-plt.xlabel("SALES")
-plt.ylabel("MSRP")
-plt.legend(title="Cluster")
+
+print("Training Samples:", len(X_train))
+print("Testing Samples:", len(X_test))
+
+
+# Pad sequences to same length
+max_length = 200
+
+X_train = pad_sequences(
+    X_train,
+    maxlen=max_length,
+    padding='post'
+)
+
+X_test = pad_sequences(
+    X_test,
+    maxlen=max_length,
+    padding='post'
+)
+
+print("Shape after Padding:")
+print(X_train.shape)
+
+
+# Build Deep Neural Network Model
+model = Sequential([
+    Embedding(input_dim=vocab_size,
+              output_dim=32,
+              input_length=max_length),
+
+    Flatten(),
+
+    Dense(64, activation='relu'),
+    Dense(32, activation='relu'),
+
+    Dense(1, activation='sigmoid')
+])
+
+# Compile Model
+model.compile(
+    optimizer='adam',
+    loss='binary_crossentropy',
+    metrics=['accuracy']
+)
+
+# Model Summary
+print("\nModel Summary:")
+model.summary()
+
+
+# Train Model
+history = model.fit(
+    X_train,
+    y_train,
+    epochs=10,
+    batch_size=128,
+    validation_split=0.2,
+    verbose=1
+)
+
+# Evaluate Model
+loss, accuracy = model.evaluate(
+    X_test,
+    y_test
+)
+
+print("\nTest Accuracy:", accuracy * 100)
+
+
+# Predict Sentiment
+predictions = model.predict(X_test)
+
+# Convert probability into Positive/Negative
+predicted_labels = (
+    predictions > 0.5
+).astype("int32")
+
+# Show Sample Predictions
+print("\nSample Predictions:")
+
+for i in range(10):
+    actual = (
+        "Positive"
+        if y_test[i] == 1
+        else "Negative"
+    )
+
+    predicted = (
+        "Positive"
+        if predicted_labels[i] == 1
+        else "Negative"
+    )
+
+    print(
+        f"Review {i+1}: "
+        f"Actual = {actual}, "
+        f"Predicted = {predicted}"
+    )
+
+
+ # Plot Accuracy Graph
+plt.figure(figsize=(8,5))
+plt.plot(
+    history.history['accuracy'],
+    label='Training Accuracy'
+)
+plt.plot(
+    history.history['val_accuracy'],
+    label='Validation Accuracy'
+)
+
+plt.xlabel("Epoch")
+plt.ylabel("Accuracy")
+plt.title("Training vs Validation Accuracy")
+plt.legend()
 plt.show()
+
+
+# Plot Loss Graph
+plt.figure(figsize=(8,5))
+plt.plot(
+    history.history['loss'],
+    label='Training Loss'
+)
+plt.plot(
+    history.history['val_loss'],
+    label='Validation Loss'
+)
+
+plt.xlabel("Epoch")
+plt.ylabel("Loss")
+plt.title("Training vs Validation Loss")
+plt.legend()
+plt.show()
+
+
+# Predict Custom Review
+word_index = tf.keras.datasets.imdb.get_word_index()
+
+reverse_word_index = {
+    value: key
+    for (key, value)
+    in word_index.items()
+}
+
+def decode_review(text):
+    return ' '.join(
+        [reverse_word_index.get(i - 3, '?')
+         for i in text]
+    )
+
+print("\nExample Review:")
+print(decode_review(X_test[0]))
+
+print("\nPredicted Sentiment:")
+if predicted_labels[0] == 1:
+    print("Positive Review")
+else:
+    print("Negative Review")
 ```
 
 ---
 
-## 5️⃣ ML: Uber Ride Fare Prediction
+## 4️⃣ DL: CNN using Fashion MNIST Dataset
 
 ```python
-# Paste your Uber Ride Prediction code here
-import pandas as pd
-import numpy as np
+#dataset : https://www.kaggle.com/datasets/vbookshelf/rice-leaf-diseases
+
+
+# =========================================================
+# RICE LEAF DISEASE DETECTION USING CNN
+# Works for BOTH Google Colab and Jupyter Notebook
+# =========================================================
+
+# =========================================================
+# STEP 1 — MOUNT GOOGLE DRIVE (COLAB ONLY)
+# =========================================================
+
+# Uncomment these 2 lines ONLY if using Google Colab
+
+# from google.colab import drive
+# drive.mount('/content/drive')
+
+
+# =========================================================
+# STEP 2 — IMPORT LIBRARIES
+# =========================================================
+
+import tensorflow as tf
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras import layers, models
 import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LinearRegression
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_squared_error, r2_score
-df = pd.read_csv("uber.csv")
-df.head()
-df.isna().sum()
-# Drop useless columns
-df.drop(["Unnamed: 0", "key"], axis=1, inplace=True)
+import numpy as np
+from tensorflow.keras.preprocessing import image
 
-# Drop missing rows
-df.dropna(inplace=True)
 
-# Convert date column to datetime
-df["pickup_datetime"] = pd.to_datetime(df["pickup_datetime"])
+# =========================================================
+# STEP 3 — DATASET PATH
+# =========================================================
 
-# Remove rows with negative fares
-df = df[df["fare_amount"] > 0]
-df.info()
+# ---------------- GOOGLE COLAB PATH ----------------
+# Uncomment if using Google Colab
 
-plt.boxplot(df["fare_amount"])
-plt.title("Outliers in Fare Amount")
+# dataset_path = "/content/drive/MyDrive/rice_leaf_diseases"
+
+
+# ---------------- JUPYTER NOTEBOOK PATH ----------------
+# Uncomment if using Jupyter Notebook
+
+dataset_path = r"C:\Users\YourName\Desktop\rice_leaf_diseases"
+
+
+# =========================================================
+# STEP 4 — IMAGE PREPROCESSING
+# =========================================================
+
+img_size = (224, 224)
+batch_size = 16
+
+datagen = ImageDataGenerator(
+    rescale=1./255,
+    validation_split=0.2,
+    rotation_range=20,
+    zoom_range=0.2,
+    horizontal_flip=True
+)
+
+train_data = datagen.flow_from_directory(
+    dataset_path,
+    target_size=img_size,
+    batch_size=batch_size,
+    class_mode='categorical',
+    subset='training'
+)
+
+val_data = datagen.flow_from_directory(
+    dataset_path,
+    target_size=img_size,
+    batch_size=batch_size,
+    class_mode='categorical',
+    subset='validation'
+)
+
+
+# =========================================================
+# STEP 5 — BUILD CNN MODEL
+# =========================================================
+
+model = models.Sequential()
+
+# First Convolution Layer
+model.add(layers.Conv2D(
+    32,
+    (3,3),
+    activation='relu',
+    input_shape=(224,224,3)
+))
+
+model.add(layers.MaxPooling2D((2,2)))
+
+# Second Convolution Layer
+model.add(layers.Conv2D(
+    64,
+    (3,3),
+    activation='relu'
+))
+
+model.add(layers.MaxPooling2D((2,2)))
+
+# Third Convolution Layer
+model.add(layers.Conv2D(
+    128,
+    (3,3),
+    activation='relu'
+))
+
+model.add(layers.MaxPooling2D((2,2)))
+
+# Flatten Layer
+model.add(layers.Flatten())
+
+# Dense Layer
+model.add(layers.Dense(
+    128,
+    activation='relu'
+))
+
+# Dropout Layer
+model.add(layers.Dropout(0.5))
+
+# Output Layer (3 classes)
+model.add(layers.Dense(
+    3,
+    activation='softmax'
+))
+
+
+# =========================================================
+# STEP 6 — COMPILE MODEL
+# =========================================================
+
+model.compile(
+    optimizer='adam',
+    loss='categorical_crossentropy',
+    metrics=['accuracy']
+)
+
+
+# =========================================================
+# STEP 7 — MODEL SUMMARY
+# =========================================================
+
+model.summary()
+
+
+# =========================================================
+# STEP 8 — TRAIN MODEL
+# =========================================================
+
+history = model.fit(
+    train_data,
+    validation_data=val_data,
+    epochs=15
+)
+
+
+# =========================================================
+# STEP 9 — EVALUATE MODEL
+# =========================================================
+
+loss, accuracy = model.evaluate(val_data)
+
+print("\nValidation Accuracy:", accuracy)
+
+
+# =========================================================
+# STEP 10 — PLOT ACCURACY GRAPH
+# =========================================================
+
+plt.figure(figsize=(8,5))
+
+plt.plot(history.history['accuracy'])
+plt.plot(history.history['val_accuracy'])
+
+plt.title('Model Accuracy')
+plt.xlabel('Epoch')
+plt.ylabel('Accuracy')
+
+plt.legend(['Train', 'Validation'])
+
 plt.show()
 
-# Remove extreme values (top & bottom 1%)
-q_low = df["fare_amount"].quantile(0.01)
-q_hi = df["fare_amount"].quantile(0.99)
-df = df[(df["fare_amount"] > q_low) & (df["fare_amount"] < q_hi)]
 
-# Check cleaned data summary
-df.describe()
+# =========================================================
+# STEP 11 — SAVE MODEL
+# =========================================================
 
-sns.heatmap(df.corr(), annot=True)
-plt.title("Correlation Heatmap")
+# -------- GOOGLE COLAB SAVE PATH --------
+# Uncomment for Colab
+
+# model.save("/content/drive/MyDrive/rice_disease_model.h5")
+
+
+# -------- JUPYTER NOTEBOOK SAVE PATH --------
+# Uncomment for Jupyter Notebook
+
+model.save("rice_disease_model.h5")
+
+print("\nModel Saved Successfully!")
+
+
+# =========================================================
+# STEP 12 — PREDICT SINGLE IMAGE
+# =========================================================
+
+# Give test image path here
+
+test_image_path = r"C:\Users\YourName\Desktop\test.jpg"
+
+# Example for Colab:
+# test_image_path = "/content/test.jpg"
+
+img = image.load_img(
+    test_image_path,
+    target_size=(224,224)
+)
+
+img_array = image.img_to_array(img)
+
+img_array = np.expand_dims(img_array, axis=0)
+
+img_array = img_array / 255.0
+
+prediction = model.predict(img_array)
+
+class_names = list(train_data.class_indices.keys())
+
+predicted_class = class_names[np.argmax(prediction)]
+
+print("\nPredicted Disease:", predicted_class)
+
+
+# =========================================================
+# DATASET FOLDER STRUCTURE
+# =========================================================
+
+"""
+rice_leaf_diseases/
+│
+├── Bacterial leaf blight/
+├── Brown spot/
+└── Leaf smut/
+"""
+
+# =========================================================
+# INSTALLATION COMMANDS (IF NEEDED)
+# =========================================================
+
+"""
+pip install tensorflow
+pip install matplotlib
+```
+
+---
+
+## 5️⃣ DL: CNN using Fashion MNIST Dataset
+
+```python
+import os
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+
+import tensorflow as tf
+from tensorflow.keras import datasets, layers, models
+import matplotlib.pyplot as plt
+import numpy as np
+
+
+# ============================================================
+# STEP 1: Load Fashion MNIST Dataset
+# ============================================================
+
+(X_train, y_train), (X_test, y_test) = datasets.fashion_mnist.load_data()
+
+print("Dataset Loaded Successfully")
+print("Training Images Shape:", X_train.shape)
+print("Training Labels Shape:", y_train.shape)
+print("Testing Images Shape:", X_test.shape)
+print("Testing Labels Shape:", y_test.shape)
+
+
+# ============================================================
+# STEP 2: Class Names
+# ============================================================
+
+class_names = [
+    "T-shirt/top",
+    "Trouser",
+    "Pullover",
+    "Dress",
+    "Coat",
+    "Sandal",
+    "Shirt",
+    "Sneaker",
+    "Bag",
+    "Ankle boot"
+]
+
+
+# ============================================================
+# STEP 3: Normalize Pixel Values
+# ============================================================
+# Pixel values are from 0 to 255.
+# Convert them into range 0 to 1.
+
+X_train = X_train / 255.0
+X_test = X_test / 255.0
+
+
+# ============================================================
+# STEP 4: Reshape Data for CNN
+# ============================================================
+# CNN requires input shape: height, width, channels.
+# Fashion MNIST images are grayscale, so channel = 1.
+
+X_train = X_train.reshape((X_train.shape[0], 28, 28, 1))
+X_test = X_test.reshape((X_test.shape[0], 28, 28, 1))
+
+print("\nAfter Reshaping:")
+print("Training Images Shape:", X_train.shape)
+print("Testing Images Shape:", X_test.shape)
+
+
+# ============================================================
+# STEP 5: Display Sample Images
+# ============================================================
+
+plt.figure(figsize=(10, 5))
+
+for i in range(10):
+    plt.subplot(2, 5, i + 1)
+    plt.imshow(X_train[i].reshape(28, 28), cmap="gray")
+    plt.title(class_names[y_train[i]])
+    plt.axis("off")
+
+plt.suptitle("Sample Images from Fashion MNIST Dataset")
 plt.show()
 
-# Separate features (X) and target (y)
-X = df.drop("fare_amount", axis=1)
-y = df["fare_amount"]
 
-# Convert datetime to numeric values
-X["pickup_datetime"] = pd.to_numeric(pd.to_datetime(X["pickup_datetime"]))
+# ============================================================
+# STEP 6: Build CNN Model
+# ============================================================
 
-# Split data
-x_train, x_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-lr = LinearRegression()
-lr.fit(x_train, y_train)
-pred_lr = lr.predict(x_test)
+model = models.Sequential()
 
-rmse_lr = np.sqrt(mean_squared_error(y_test, pred_lr))
-r2_lr = r2_score(y_test, pred_lr)
+# First Convolution + Pooling Layer
+model.add(layers.Conv2D(
+    filters=32,
+    kernel_size=(3, 3),
+    activation="relu",
+    input_shape=(28, 28, 1)
+))
+model.add(layers.MaxPooling2D((2, 2)))
 
-print("Linear Regression → RMSE:", round(rmse_lr, 3))
-print("Linear Regression → R²:", round(r2_lr, 3))
+# Second Convolution + Pooling Layer
+model.add(layers.Conv2D(
+    filters=64,
+    kernel_size=(3, 3),
+    activation="relu"
+))
+model.add(layers.MaxPooling2D((2, 2)))
 
-rf = RandomForestRegressor(n_estimators=100, random_state=42)
-rf.fit(x_train, y_train)
-pred_rf = rf.predict(x_test)
+# Third Convolution Layer
+model.add(layers.Conv2D(
+    filters=64,
+    kernel_size=(3, 3),
+    activation="relu"
+))
 
-rmse_rf = np.sqrt(mean_squared_error(y_test, pred_rf))
-r2_rf = r2_score(y_test, pred_rf)
+# Flatten Layer
+model.add(layers.Flatten())
 
-print("Random Forest → RMSE:", round(rmse_rf, 3))
-print("Random Forest → R²:", round(r2_rf, 3))
+# Fully Connected Dense Layer
+model.add(layers.Dense(64, activation="relu"))
 
-# ✅ Added accuracy line
-accuracy_rf = rf.score(x_test, y_test) * 100
-print("Random Forest → Accuracy:", round(accuracy_rf, 2), "%")
+# Dropout Layer to reduce overfitting
+model.add(layers.Dropout(0.3))
 
-plt.scatter(y_test, pred_rf, color='blue', alpha=0.4)
-plt.title("Predicted vs Actual Fare (Random Forest)")
-plt.xlabel("Actual Fare")
-plt.ylabel("Predicted Fare")
+# Output Layer
+# 10 neurons because Fashion MNIST has 10 classes
+model.add(layers.Dense(10, activation="softmax"))
+
+
+# ============================================================
+# STEP 7: Compile Model
+# ============================================================
+
+model.compile(
+    optimizer="adam",
+    loss="sparse_categorical_crossentropy",
+    metrics=["accuracy"]
+)
+
+print("\n========== MODEL SUMMARY ==========")
+model.summary()
+
+
+# ============================================================
+# STEP 8: Train Model
+# ============================================================
+
+history = model.fit(
+    X_train,
+    y_train,
+    epochs=10,
+    batch_size=64,
+    validation_split=0.2,
+    verbose=1
+)
+
+
+# ============================================================
+# STEP 9: Evaluate Model
+# ============================================================
+
+test_loss, test_accuracy = model.evaluate(X_test, y_test, verbose=0)
+
+print("\n========== MODEL EVALUATION ==========")
+print("Test Loss:", test_loss)
+print("Test Accuracy:", test_accuracy)
+
+
+# ============================================================
+# STEP 10: Make Predictions
+# ============================================================
+
+predictions = model.predict(X_test)
+
+predicted_labels = np.argmax(predictions, axis=1)
+
+print("\nFirst 10 Predictions:")
+for i in range(10):
+    print(
+        "Image", i + 1,
+        "| Actual:", class_names[y_test[i]],
+        "| Predicted:", class_names[predicted_labels[i]]
+    )
+
+
+# ============================================================
+# STEP 11: Plot Accuracy Graph
+# ============================================================
+
+plt.figure(figsize=(8, 5))
+plt.plot(history.history["accuracy"], label="Training Accuracy")
+plt.plot(history.history["val_accuracy"], label="Validation Accuracy")
+plt.title("Training Accuracy vs Validation Accuracy")
+plt.xlabel("Epochs")
+plt.ylabel("Accuracy")
+plt.legend()
+plt.grid(True)
 plt.show()
 
+
+# ============================================================
+# STEP 12: Plot Loss Graph
+# ============================================================
+
+plt.figure(figsize=(8, 5))
+plt.plot(history.history["loss"], label="Training Loss")
+plt.plot(history.history["val_loss"], label="Validation Loss")
+plt.title("Training Loss vs Validation Loss")
+plt.xlabel("Epochs")
+plt.ylabel("Loss")
+plt.legend()
+plt.grid(True)
+plt.show()
+
+
+# ============================================================
+# STEP 13: Show Prediction Images
+# ============================================================
+
+plt.figure(figsize=(12, 6))
+
+for i in range(10):
+    plt.subplot(2, 5, i + 1)
+    plt.imshow(X_test[i].reshape(28, 28), cmap="gray")
+
+    actual = class_names[y_test[i]]
+    predicted = class_names[predicted_labels[i]]
+
+    plt.title(f"A: {actual}\nP: {predicted}")
+    plt.axis("off")
+
+plt.suptitle("Actual vs Predicted Fashion Categories")
+plt.show()
+
+
+# ============================================================
+# STEP 14: Save Model
+# ============================================================
+
+model.save("fashion_mnist_cnn_model.h5")
+
+print("\nModel saved successfully as fashion_mnist_cnn_model.h5")
 ```
 
 ---
 
-## 6️⃣ DAA: N-Queens (Backtracking)
+## 6️⃣ DL: N-Queens (Backtracking)
 
-```cpp
-// Paste your N-Queens Backtracking code here
-#include <iostream>
-#include <vector>   
-#include <cmath>    
-using namespace std;
+```python
+import pandas as pd 
+import numpy as np 
 
-using namespace std;
+df1 = pd.read_csv("Google_Stock_Price_Train.csv")
+df2 = pd.read_csv("Google_Stock_Price_Test.csv")
 
-int solutionCount = 0;
+df1.info()
 
-void printBoard(vector<int> &board, int n) {
-    cout << "Solution: " << ++solutionCount << endl;
-    for (int i = 0; i < n; i++) {
-        for (int j = 0; j < n; j++) {
-            if (board[i] == j)
-                cout << "Q ";
-            else
-                cout << ". ";
-        }
-        cout << endl;
-    }
-    cout << endl;
-}
+df1['Close'] = df1['Close'].astype(str).str.replace(",","").astype(float)
+df2['Close'] = df2['Close'].astype(str).str.replace(",","").astype(float)
 
-bool isSafe(vector<int> &board, int row, int col) {
-    for (int i = 0; i < row; i++) {
-        if (board[i] == col || abs(board[i] - col) == abs(i - row))
-            return false;
-    }
-    return true;
-}
+from sklearn.preprocessing import MinMaxScaler
+train_scaler = MinMaxScaler()
+df1['Normalized close'] = train_scaler.fit_transform(df1['Close'].values.reshape(-1,1))
 
-void solveQueens(vector<int> &board, int row, int n) {
-    if (row == n) {
-        printBoard(board, n);
-        return;
-    }
 
-    for (int col = 0; col < n; col++) {
-        if (isSafe(board, row, col)) {
-            board[row] = col;
-            solveQueens(board, row + 1, n);   // ✔ FIXED
-        }
-    }
-}
+test_scaler = MinMaxScaler()
+df2['Normalized close'] = test_scaler.fit_transform(df2['Close'].values.reshape(-1,1))
 
-int main() {
-    int n;
-    cout << "Enter number of n for n queens: ";
-    cin >> n;
 
-    vector<int> board(n);
-    solveQueens(board, 0, n);
+x_train = df1['Normalized close'].values[:-1].reshape(-1,1,1)
+y_train = df1['Normalized close'].values[1:].reshape(-1,1,1)
 
-    if (solutionCount == 0)
-        cout << "No solution found." << endl;
-    else
-        cout << "Total solutions: " << solutionCount << endl;
+x_test = df2['Normalized close'].values[:-1].reshape(-1,1,1)
+y_test = df2['Normalized close'].values[1:].reshape(-1,1,1)
 
-    return 0;
-}
 
-/*
-TIME COMPLEXITY (Backtracking):
---------------------------------
-Worst Case: O(N!)
-Reason:
-- In row 1 → N choices
-- In row 2 → N-1 choices (due to conflicts)
-- In row 3 → N-2 choices
-- ...
-- Total ≈ N * (N-1) * (N-2) ... ≈ N!
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense
 
-SPACE COMPLEXITY:
------------------
-O(N)
-Reason:
-- Board stores 1 queen position per row → N size
-- Recursion depth = N
-So total auxiliary space = O(N)
-*/
+model = Sequential()
+model.add(LSTM(4, input_shape = (1,1)))
+model.add(Dense(1))
+
+model.compile(optimizer = 'adam', loss = 'mse')
+
+model.summary()
+
+
+
+model.fit(x_train,y_train, validation_data= (x_test,y_test), epochs = 100, batch_size= 1)
+
+
+test_loss = model.evaluate(x_test,y_test)
+print('Testing loss: ', test_loss)
+
+
+pred = model.predict(x_test)
+
+
+y_test_actual = test_scaler.inverse_transform(y_test.reshape(-1,1))
+y_test_pred = test_scaler.inverse_transform(pred.reshape(-1,1))
+
+index = 1
+print("Actual: ", y_test_actual[index])
+print("Predicted: ", y_test_pred[index])
 ```
 
 ---
-
-## 7️⃣ DAA: 0/1 Knapsack (DP)
-
-```cpp
-// Paste your 0/1 Knapsack DP code here
-#include <iostream>
-#include <vector>
-using namespace std;
-
-/*
-0/1 KNAPSACK (Dynamic Programming)
-
-TIME COMPLEXITY:
-----------------
-O(n * W)
-Because we fill an n x W DP table.
-
-SPACE COMPLEXITY:
------------------
-O(n * W)
-Because DP table size is (n+1) x (W+1)
-
-Where:
-n = number of items
-W = capacity of knapsack
-*/
-
-int knapsack(int W, vector<int> &wt, vector<int> &val, int n) {
-
-    // Create DP table of size (n+1) x (W+1)
-    vector<vector<int>> dp(n + 1, vector<int>(W + 1, 0));
-
-    // Fill DP table (bottom-up)
-    for (int i = 1; i <= n; i++) {          // for each item
-        for (int w = 1; w <= W; w++) {      // for each weight
-            if (wt[i - 1] <= w) {
-                // Choose max of: take item OR don't take
-                dp[i][w] = max(val[i - 1] + dp[i - 1][w - wt[i - 1]],
-                               dp[i - 1][w]);
-            } else {
-                // Cannot include item
-                dp[i][w] = dp[i - 1][w];
-            }
-        }
-    }
-
-    return dp[n][W];   // Final answer
-}
-
-int main() {
-    int n, W;
-
-    cout << "Enter number of items: ";
-    cin >> n;
-
-    vector<int> wt(n), val(n);
-
-    cout << "Enter weight of each item:\n";
-    for (int i = 0; i < n; i++) {
-        cin >> wt[i];
-    }
-
-    cout << "Enter value of each item:\n";
-    for (int i = 0; i < n; i++) {
-        cin >> val[i];
-    }
-
-    cout << "Enter capacity of knapsack: ";
-    cin >> W;
-
-    int ans = knapsack(W, wt, val, n);
-
-    cout << "Maximum value in 0/1 Knapsack = " << ans << endl;
-
-    return 0;
-}
-
-```
-
----
-
-## 8️⃣ DAA: Fractional Knapsack (Greedy)
-
-```cpp
-// Paste your Fractional Knapsack code here
-#include <iostream>
-#include <vector>
-#include <algorithm>
-using namespace std;
-
-// Structure to store item info
-struct Item
-{
-    int weight;
-    int value;
-};
-
-// Comparator based on value/weight ratio
-bool cmp(Item a, Item b)
-{
-    double r1 = (double)a.value / a.weight;
-    double r2 = (double)b.value / b.weight;
-    return r1 > r2; // sort descending
-}
-
-double fractionalKnapsack(int capacity, vector<Item> &items)
-{
-    sort(items.begin(), items.end(), cmp); // sort by ratio
-
-    double totalValue = 0.0;
-
-    for (int i = 0; i < items.size(); i++)
-    {
-
-        if (capacity == 0)
-            break;
-
-        if (items[i].weight <= capacity)
-        {
-            totalValue += items[i].value;
-            capacity -= items[i].weight;
-        }
-        else
-        {
-            double fraction = (double)capacity / items[i].weight;
-            totalValue += items[i].value * fraction;
-            capacity = 0; // knapsack full
-        }
-    }
-
-    return totalValue;
-}
-
-int main()
-{
-    int n, capacity;
-
-    cout << "Enter number of items: ";
-    cin >> n;
-
-    vector<Item> items(n);
-
-    cout << "Enter weight of each item:\n";
-    for (int i = 0; i < n; i++)
-    {
-        cin >> items[i].weight;
-    }
-
-    cout << "Enter value of each item:\n";
-    for (int i = 0; i < n; i++)
-    {
-        cin >> items[i].value;
-    }
-
-    cout << "Enter knapsack capacity: ";
-    cin >> capacity;
-
-    double maxValue = fractionalKnapsack(capacity, items);
-
-    cout << "Maximum value in fractional knapsack = " << maxValue << endl;
-
-    return 0;
-}
-
-
-/*
-TIME COMPLEXITY:
-----------------
-Sorting items by ratio: O(n log n)
-Taking items: O(n)
-
-Total: O(n log n)
-
-SPACE COMPLEXITY:
------------------
-O(1) extra space (only a few variables)
-*/
-
-
-```
-
----
-
-## 9️⃣ DAA: Fibonacci (Recursive + Iterative)
-
-```cpp
-// Paste your Fibonacci code here
-#include <iostream>
-using namespace std;
-
-// ------------------------------
-// Recursive Fibonacci Function
-// ------------------------------
-// Time Complexity:  O(2^n)
-//   Because each call splits into 2 calls.
-// Space Complexity: O(n)
-//   Due to recursion call stack depth.
-// ------------------------------
-int fib_recursive(int n) {
-    if (n <= 1)
-        return n;
-    return fib_recursive(n - 1) + fib_recursive(n - 2);
-}
-
-// ------------------------------
-// Non-Recursive (Iterative) Fibonacci
-// ------------------------------
-// Time Complexity:  O(n)
-//   Single loop from 2 to n.
-// Space Complexity: O(1)
-//   Uses constant variables only.
-// ------------------------------
-int fib_iterative(int n) {
-    if (n <= 1)
-        return n;
-
-    int a = 0, b = 1, next = 0;
-    for (int i = 2; i <= n; i++) {
-        next = a + b;
-        a = b;
-        b = next;
-    }
-    return b;
-}
-
-int main() {
-    int n;
-    cout << "Enter n: ";
-    cin >> n;
-
-    cout << "\nRecursive Fibonacci of " << n << " = " 
-         << fib_recursive(n) << endl;
-
-    cout << "Iterative Fibonacci of " << n << " = " 
-         << fib_iterative(n) << endl;
-
-    return 0;
-}
-
-```
-
----
-
-## 🔟 BLT: Student Data Contract
-
-```solidity
-// Paste your Student Data Solidity contract here
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
-
-contract StudentData {
-    struct Student {
-        uint id;
-        string name;
-        uint age;
-    }
-
-    Student[] public students;
-
-    function addStudent(uint _id, string memory _name, uint _age) public {
-        students.push(Student(_id, _name, _age));
-    }
-
-    function getStudentCount() public view returns (uint) {
-        return students.length;
-    }
-
-    function getStudent(uint _index) public view returns (Student memory) {
-        require(_index < students.length, "Invalid index");
-        return students[_index];
-    }
-
-    function getAllStudents() external view returns (Student[] memory) {
-        return students;
-    }
-
-    // Receive function - called when contract receives plain Ether
-    receive() external payable {}
-
-    // Fallback function - called when no function matches AND data is sent
-    fallback() external payable {}
-}
-
-```
-
----
-
-## 1️⃣1️⃣ BLT: Bank Details Contract
-
-```solidity
-// Paste your Bank Details Solidity contract here
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
-
-contract SimpleBank {
-
-    mapping(address => uint) public balances;
-
-    function deposit() public payable {
-        balances[msg.sender] += msg.value;
-    }
-
-    function withdraw(uint _amount) public {
-        require(balances[msg.sender] >= _amount, "Not enough balance");
-        balances[msg.sender] -= _amount;
-        payable(msg.sender).transfer(_amount);
-    }
-
-    function getBalance() public view returns (uint) {
-        return balances[msg.sender];
-    }
-}
-
-```
-
----
-
-```
-
----
-
-If you want, I can also generate a **single PDF**, **GitHub README**, or **practical file format** with this template.
-```
+\
