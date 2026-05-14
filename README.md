@@ -1047,7 +1047,7 @@ print("\nModel saved successfully as fashion_mnist_cnn_model.h5")
 
 ---
 
-## 6️⃣ DL: N-Queens (Backtracking)
+## 6️⃣ DL: RNN
 
 ```python
 import pandas as pd 
